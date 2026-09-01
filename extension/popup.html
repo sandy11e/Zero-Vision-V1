@@ -15,11 +15,17 @@
         <!-- TOP TAB BAR -->
         <header class="panel-header">
             <div class="tab-title">
-                <span class="status-indicator"></span>
+                <span class="status-indicator" title="Privacy Shield Active"></span>
                 <span class="title-text">Privacy Agent Side Chat</span>
             </div>
 
             <div class="header-actions">
+                <button id="settingsToggleBtn" class="tool-btn" title="Privacy Filter Settings">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
                 <button id="clearHistory" class="tool-btn" title="Clear conversation history">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"></polyline>
@@ -29,35 +35,84 @@
             </div>
         </header>
 
-        <!-- PRIVACY SHIELD AUDIT BANNER -->
-        <section class="privacy-strip">
-            <div class="strip-left">
-                <svg class="shield-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    <path d="M9 12l2 2 4-4" />
-                </svg>
-                <span class="strip-label">Protected:</span>
-                <span id="redactedCountBadge" class="count-tag">0 items</span>
+        <!-- SETTINGS DRAWER (USER-CUSTOMIZABLE PRIVACY RULES) -->
+        <div id="settingsDrawer" class="settings-drawer hidden">
+            <div class="settings-header">
+                <div class="settings-title-wrap">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M9 12l2 2 4-4"/>
+                    </svg>
+                    <span>Custom Privacy Rules</span>
+                </div>
+                <button id="closeSettingsBtn" class="tool-btn" title="Close settings">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
 
-            <button id="togglePreviewBtn" class="strip-toggle" title="Inspect sanitized visual state">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-                <span id="togglePreviewText">Inspect Mask</span>
-            </button>
-        </section>
+            <div class="settings-body">
+                <div class="setting-item">
+                    <div class="setting-text">
+                        <span class="setting-title">National Identity Cards</span>
+                        <span class="setting-desc">Aadhaar, PAN, and Passport numbers</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleNationalIds" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-        <!-- COLLAPSIBLE VISUAL MASK DRAWER -->
-        <div id="previewContainer" class="mask-drawer hidden">
-            <div class="drawer-bar">
-                <span>Sanitized Screenshot (Zero PII Transmitted)</span>
-                <span class="status-clean">100% Masked</span>
-            </div>
-            <div class="drawer-view">
-                <img id="redactedPreviewImg" alt="Redacted Canvas" />
+                <div class="setting-item">
+                    <div class="setting-text">
+                        <span class="setting-title">Financial PII & CVV</span>
+                        <span class="setting-desc">Payment cards, Bank A/C, and IFSC</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleFinancial" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-text">
+                        <span class="setting-title">Authentication & Secrets</span>
+                        <span class="setting-desc">Passwords, PINs, OTPs, and API keys</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleAuth" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-text">
+                        <span class="setting-title">Contact Information</span>
+                        <span class="setting-desc">Mobile numbers (+91) and personal emails</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleContacts" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-text">
+                        <span class="setting-title">On-Device NER (Wasm/WebGPU)</span>
+                        <span class="setting-desc">Unstructured Person Names, Locations, & Orgs</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleNer" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-title" for="customKeywordsInput">Custom Confidential Words (Comma-Separated)</label>
+                    <input type="text" id="customKeywordsInput" class="custom-kw-input" placeholder="e.g. ProjectTitan, EmpID-9921, ConfidentialCode">
+                </div>
             </div>
         </div>
 
@@ -79,7 +134,7 @@
         <!-- ERROR BANNER -->
         <section id="error" class="error-strip hidden">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="10" r="10"></circle>
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
@@ -88,21 +143,19 @@
 
         <!-- COPILOT STYLE COMPOSER DOCK -->
         <footer class="composer-section">
-            <!-- QUICK ACTION CHIPS -->
-            
-
-            <!-- INPUT BOX -->
             <div class="copilot-input-box">
                 <textarea id="task" placeholder="Ask anything .." rows="1" autofocus></textarea>
 
                 <div class="input-toolbar">
                     <div class="toolbar-left">
-                        <div class="model-select-pill">
-                            <span>Groq Vision 20B</span>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
+                        <!-- INTERACTIVE MODEL SELECTOR -->
+                        <div class="model-select-wrap">
+                            <select id="modelSelect" class="model-dropdown" title="Choose Decision AI Model">
+                                <option value="groq/compound-mini" selected>Groq Compound Mini</option>
+                                <option value="openai/gpt-oss-20b">GPT-OSS 20B (Reasoning)</option>
+                                <option value="openai/gpt-oss-120b">GPT-OSS 120B (Deep)</option>
+                                <option value="qwen/qwen3.6-27b">Qwen 27B Vision</option>
+                            </select>
                         </div>
                     </div>
 
@@ -128,7 +181,22 @@
 
     </div>
 
+    <!-- IN-APP STYLED CONFIRMATION MODAL POPUP -->
+    <div id="customModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span id="modalTitle" class="modal-title">Confirm Action</span>
+            </div>
+            <div id="modalMessage" class="modal-body">Are you sure?</div>
+            <div class="modal-footer">
+                <button id="modalCancelBtn" class="modal-btn btn-secondary">Cancel</button>
+                <button id="modalConfirmBtn" class="modal-btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SCRIPTS -->
+    <script src="ner.js"></script>
     <script src="privacy.js"></script>
     <script src="popup.js"></script>
 

@@ -31,7 +31,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["privacy.js", "content.js"]
+      "js": ["ner.js", "privacy.js", "content.js"]
     }
   ]
 }

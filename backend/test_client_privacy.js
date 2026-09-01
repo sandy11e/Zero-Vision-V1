@@ -1,15 +1,21 @@
 /**
- * Unit Test for Client-Side Privacy Shield
+ * Unit Test for Client-Side Privacy Shield & On-Device NER Engine
  */
 const fs = require("fs");
 const path = require("path");
 
-// Load privacy.js into Node VM
+// Mock window environment for Node.js test execution
+global.window = global;
+
+// Load ner.js and privacy.js
+const nerJsCode = fs.readFileSync(path.join(__dirname, "../extension/ner.js"), "utf8");
+eval(nerJsCode);
+
 const privacyJsCode = fs.readFileSync(path.join(__dirname, "../extension/privacy.js"), "utf8");
 eval(privacyJsCode);
 
 console.log("\n=======================================================");
-console.log("   TESTING CLIENT-SIDE PRIVACY SHIELD (In-Browser)   ");
+console.log("   TESTING CLIENT-SIDE PRIVACY SHIELD & ON-DEVICE NER ");
 console.log("=======================================================\n");
 
 const testCases = [
@@ -42,12 +48,23 @@ const testCases = [
         name: "Bank Account and IFSC Masking",
         input: "Bank A/C: 123456789012 IFSC: HDFC0001234",
         expectedType: ["BANK_ACCOUNT", "IFSC"]
+    },
+    {
+        name: "Unstructured Person Name & Location (On-Device NER)",
+        input: "Applicant Pranesh Kumar resides in Chennai and works with Dr. Rajesh Sharma.",
+        expectedType: ["PER", "LOC"]
+    },
+    {
+        name: "User-Defined Custom Confidential Words",
+        input: "Confidential launch for ProjectTitan and security code EmpID-9921.",
+        config: { customKeywords: "ProjectTitan, EmpID-9921" },
+        expectedType: ["CUSTOM_SECRET", "CUSTOM_SECRET"]
     }
 ];
 
 let passed = 0;
 testCases.forEach((tc, idx) => {
-    const res = sanitizeString(tc.input);
+    const res = sanitizeString(tc.input, tc.config || {});
     console.log(`Test [${idx + 1}] ${tc.name}:`);
     console.log(`  Raw Text:       "${tc.input}"`);
     console.log(`  Sanitized Text: "${res.text}"`);
@@ -70,7 +87,7 @@ console.log("Testing Page Context Sanitizer:");
 const rawPageContext = {
     url: "https://secure-bank.example.com/login",
     title: "Secure Login",
-    text: "Welcome user. Your PAN is ABCDE1234F and phone is +91 9876543210.",
+    text: "Welcome user. Your PAN is ABCDE1234F, name is Pranesh Kumar, and phone is +91 9876543210.",
     elements: [
         { tag: "input", type: "password", placeholder: "Enter password", name: "user_password", text: "" },
         { tag: "input", type: "text", placeholder: "Enter email", name: "email_address", text: "john@example.com" },

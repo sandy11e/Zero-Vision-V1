@@ -14,13 +14,27 @@ const errorCard = document.getElementById("error");
 const errorMessage = document.getElementById("errorMessage");
 const chat = document.getElementById("chat");
 const clearHistoryButton = document.getElementById("clearHistory");
-const exampleButtons = document.querySelectorAll(".sugg-chip");
 
-const redactedCountBadge = document.getElementById("redactedCountBadge");
-const togglePreviewBtn = document.getElementById("togglePreviewBtn");
-const togglePreviewText = document.getElementById("togglePreviewText");
-const previewContainer = document.getElementById("previewContainer");
-const redactedPreviewImg = document.getElementById("redactedPreviewImg");
+// Settings Drawer Elements
+const settingsToggleBtn = document.getElementById("settingsToggleBtn");
+const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+const settingsDrawer = document.getElementById("settingsDrawer");
+const toggleNationalIds = document.getElementById("toggleNationalIds");
+const toggleFinancial = document.getElementById("toggleFinancial");
+const toggleAuth = document.getElementById("toggleAuth");
+const toggleContacts = document.getElementById("toggleContacts");
+const toggleNer = document.getElementById("toggleNer");
+const customKeywordsInput = document.getElementById("customKeywordsInput");
+
+// Model Selector
+const modelSelect = document.getElementById("modelSelect");
+
+// In-App Modal Elements
+const customModal = document.getElementById("customModal");
+const modalTitle = document.getElementById("modalTitle");
+const modalMessage = document.getElementById("modalMessage");
+const modalCancelBtn = document.getElementById("modalCancelBtn");
+const modalConfirmBtn = document.getElementById("modalConfirmBtn");
 
 /* =========================================================
    CONFIG & STATE
@@ -28,10 +42,124 @@ const redactedPreviewImg = document.getElementById("redactedPreviewImg");
 
 const BACKEND_URL = "http://127.0.0.1:8000/agent/next";
 const CHAT_KEY = "copilotPrivacyVisionSideChat";
+const CONFIG_KEY = "copilotPrivacyFilterConfig";
+const MODEL_KEY = "copilotSelectedModelChoice";
 
 let running = false;
 let controller = null;
-let currentPreviewVisible = false;
+let currentSettingsVisible = false;
+
+// Default Privacy Config
+let activePrivacyConfig = {
+    nationalIds: true,
+    financial: true,
+    auth: true,
+    contacts: true,
+    ner: true,
+    customKeywords: ""
+};
+
+/* =========================================================
+   IN-APP MODAL (REPLACES NATIVE BROWSER ALERTS / CONFIRMS)
+========================================================= */
+
+let modalResolver = null;
+
+function showCustomModal({ title = "Confirm Action", message = "Are you sure?", confirmText = "Confirm", cancelText = "Cancel" }) {
+    modalTitle.textContent = title;
+    modalMessage.textContent = message;
+    modalConfirmBtn.textContent = confirmText;
+    modalCancelBtn.textContent = cancelText;
+
+    customModal.classList.remove("hidden");
+
+    return new Promise((resolve) => {
+        modalResolver = resolve;
+    });
+}
+
+function hideCustomModal() {
+    customModal.classList.add("hidden");
+    if (modalResolver) {
+        modalResolver = null;
+    }
+}
+
+modalConfirmBtn.addEventListener("click", () => {
+    if (modalResolver) modalResolver(true);
+    hideCustomModal();
+});
+
+modalCancelBtn.addEventListener("click", () => {
+    if (modalResolver) modalResolver(false);
+    hideCustomModal();
+});
+
+/* =========================================================
+   SETTINGS & MODEL MANAGEMENT
+========================================================= */
+
+async function loadPrivacyConfig() {
+    const data = await chrome.storage.local.get([CONFIG_KEY, MODEL_KEY]);
+    if (data[CONFIG_KEY]) {
+        activePrivacyConfig = { ...activePrivacyConfig, ...data[CONFIG_KEY] };
+    }
+
+    // Update UI controls
+    toggleNationalIds.checked = activePrivacyConfig.nationalIds;
+    toggleFinancial.checked = activePrivacyConfig.financial;
+    toggleAuth.checked = activePrivacyConfig.auth;
+    toggleContacts.checked = activePrivacyConfig.contacts;
+    toggleNer.checked = activePrivacyConfig.ner;
+    customKeywordsInput.value = activePrivacyConfig.customKeywords || "";
+
+    if (data[MODEL_KEY] && modelSelect) {
+        modelSelect.value = data[MODEL_KEY];
+    }
+}
+
+async function savePrivacyConfig() {
+    activePrivacyConfig = {
+        nationalIds: toggleNationalIds.checked,
+        financial: toggleFinancial.checked,
+        auth: toggleAuth.checked,
+        contacts: toggleContacts.checked,
+        ner: toggleNer.checked,
+        customKeywords: customKeywordsInput.value.trim()
+    };
+    await chrome.storage.local.set({ [CONFIG_KEY]: activePrivacyConfig });
+}
+
+if (modelSelect) {
+    modelSelect.addEventListener("change", async () => {
+        const chosen = modelSelect.value;
+        await chrome.storage.local.set({ [MODEL_KEY]: chosen });
+        setStatus(`AI Model set to ${formatModelLabel(chosen)}`, "stopped");
+        setTimeout(() => {
+            if (!running) hideStatus();
+        }, 1500);
+    });
+}
+
+settingsToggleBtn.addEventListener("click", () => {
+    currentSettingsVisible = !currentSettingsVisible;
+    if (currentSettingsVisible) {
+        settingsDrawer.classList.remove("hidden");
+    } else {
+        settingsDrawer.classList.add("hidden");
+    }
+});
+
+closeSettingsBtn.addEventListener("click", () => {
+    currentSettingsVisible = false;
+    settingsDrawer.classList.add("hidden");
+});
+
+[toggleNationalIds, toggleFinancial, toggleAuth, toggleContacts, toggleNer].forEach(el => {
+    el.addEventListener("change", savePrivacyConfig);
+});
+
+customKeywordsInput.addEventListener("input", savePrivacyConfig);
 
 /* =========================================================
    EVENT LISTENERS & DYNAMIC GLOW BUTTON
@@ -47,16 +175,6 @@ function updateSendButtonState() {
         runButton.classList.remove("glowing");
     }
 }
-
-exampleButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-        const text = button.querySelector("span")?.textContent || button.textContent;
-        taskInput.value = text.trim();
-        autoResizeTextarea();
-        updateSendButtonState();
-        taskInput.focus();
-    });
-});
 
 runButton.addEventListener("click", runAgent);
 
@@ -82,24 +200,22 @@ stopButton.addEventListener("click", () => {
     }
 });
 
-togglePreviewBtn.addEventListener("click", () => {
-    currentPreviewVisible = !currentPreviewVisible;
-    if (currentPreviewVisible) {
-        previewContainer.classList.remove("hidden");
-        togglePreviewText.textContent = "Hide Mask";
-    } else {
-        previewContainer.classList.add("hidden");
-        togglePreviewText.textContent = "Inspect Mask";
-    }
-});
-
 clearHistoryButton.addEventListener("click", clearChatWithPrompt);
 
 async function clearChatWithPrompt() {
     if (running) return;
     const messages = await getChat();
     if (messages.length === 0) return;
-    if (confirm("Clear conversation history?")) {
+
+    // In-app styled confirmation popup
+    const confirmed = await showCustomModal({
+        title: "Clear Conversation",
+        message: "Are you sure you want to clear your conversation history? This cannot be undone.",
+        confirmText: "Clear History",
+        cancelText: "Keep Chat"
+    });
+
+    if (confirmed) {
         await clearChat();
     }
 }
@@ -148,6 +264,7 @@ async function runAgent() {
         const tabId = tab.id;
         const history = [];
         const MAX_STEPS = 20;
+        const selectedModel = modelSelect ? modelSelect.value : "groq/compound-mini";
 
         for (let step = 0; step < MAX_STEPS && running; step++) {
             stepCounter.textContent = `Step ${step + 1}/${MAX_STEPS}`;
@@ -164,10 +281,10 @@ async function runAgent() {
                 console.warn("captureVisibleTab warning:", e);
             }
 
-            // 2. Extract DOM Context & Scan Sensitive Regions
+            // 2. Extract DOM Context & Scan Sensitive Regions (Passing User Privacy Config)
             setStatus(`Scanning & redacting sensitive PII on-device (Step ${step + 1})...`);
 
-            const pageContextData = await extractPageData(tabId);
+            const pageContextData = await extractPageData(tabId, activePrivacyConfig);
             const rawContext = pageContextData.context;
             const sensitiveData = pageContextData.sensitive;
 
@@ -179,7 +296,8 @@ async function runAgent() {
             if (window.PrivacyShield) {
                 const sanitizedResult = window.PrivacyShield.sanitizePageContext(
                     rawContext,
-                    sensitiveData.sensitiveRegions || []
+                    sensitiveData.sensitiveRegions || [],
+                    activePrivacyConfig
                 );
                 sanitizedContext = sanitizedResult.sanitizedContext;
                 privacyStats = sanitizedResult.privacySummary;
@@ -193,16 +311,11 @@ async function runAgent() {
                             height: sensitiveData.viewportHeight
                         }
                     );
-
-                    redactedPreviewImg.src = sanitizedScreenshot;
                 }
             }
 
-            const totalRedacted = privacyStats.redactedCount || sensitiveData.sensitiveRegions.length || 0;
-            redactedCountBadge.textContent = `${totalRedacted} items`;
-
-            // 4. Send Sanitized Payload to Backend VLM
-            setStatus(`Vision AI reasoning (Step ${step + 1})...`);
+            // 4. Send Sanitized Payload with Selected Model to Backend VLM
+            setStatus(`Vision AI (${selectedModel}) reasoning (Step ${step + 1})...`);
 
             const response = await fetch(BACKEND_URL, {
                 method: "POST",
@@ -214,7 +327,8 @@ async function runAgent() {
                     page_context: sanitizedContext,
                     screenshot: sanitizedScreenshot,
                     history: history,
-                    privacy: privacyStats
+                    privacy: privacyStats,
+                    model: selectedModel
                 }),
                 signal: controller.signal
             });
@@ -233,7 +347,8 @@ async function runAgent() {
             // 5. Process Decision
             if (action.action === "done") {
                 const finalResult = action.result || "Task completed successfully.";
-                await addChatMessage("agent", finalResult);
+                const activeModelName = data.model_used || selectedModel;
+                await addChatMessage("agent", finalResult, activeModelName);
                 hideStatus();
                 running = false;
                 break;
@@ -287,10 +402,10 @@ async function runAgent() {
    PAGE CONTEXT EXTRACTION & SENSITIVE SCANNING
 ========================================================= */
 
-async function extractPageData(tabId) {
+async function extractPageData(tabId, userConfig = {}) {
     const results = await chrome.scripting.executeScript({
         target: { tabId },
-        func: () => {
+        func: (cfg) => {
             const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
             const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
             const dpr = window.devicePixelRatio || 1;
@@ -338,29 +453,52 @@ async function extractPageData(tabId) {
                 elements: elements.slice(0, 200)
             };
 
-            // 2. Sensitive Scanner
+            // 2. Sensitive Scanner with User Preferences
             const sensitiveRegions = [];
-            const SENSITIVE_KEYWORDS = [
-                "password", "passwd", "pass", "pin", "otp", "security_code",
-                "secret", "cvv", "cvc", "credit_card", "card_number", "cardnumber",
-                "bank_account", "account_number", "aadhaar", "aadhar", "pan",
-                "passport", "ssn", "date_of_birth", "dob", "birth_date",
-                "api_key", "apikey", "access_token", "auth_token", "bearer_token"
-            ];
+            const SENSITIVE_KEYWORDS = [];
+            if (cfg.auth !== false) {
+                SENSITIVE_KEYWORDS.push("password", "passwd", "pass", "pin", "otp", "security_code", "secret", "api_key", "apikey", "access_token", "auth_token");
+            }
+            if (cfg.financial !== false) {
+                SENSITIVE_KEYWORDS.push("cvv", "cvc", "credit_card", "card_number", "cardnumber", "bank_account", "account_number");
+            }
+            if (cfg.nationalIds !== false) {
+                SENSITIVE_KEYWORDS.push("aadhaar", "aadhar", "pan", "passport", "ssn", "date_of_birth", "dob");
+            }
 
-            const PATTERNS = {
-                API_KEY: /\b(?:sk|pk|api|key|token|secret)[_-][A-Za-z0-9_-]{16,}\b/gi,
-                AWS_ACCESS_KEY: /\bAKIA[0-9A-Z]{16}\b/g,
-                JWT: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g,
-                CARD: /(?<!\d)(?:\d{4}[\s-]?){3}\d{4}(?!\d)/g,
-                AADHAAR: /(?<!\d)\d{4}[\s-]\d{4}[\s-]\d{4}(?!\d)/g,
-                PAN: /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g,
-                PASSPORT: /\b[A-Z][0-9]{7}\b/g,
-                EMAIL: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
-                PHONE: /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g,
-                IFSC: /\b[A-Z]{4}0[A-Z0-9]{6}\b/g,
-                BANK_ACCOUNT: /(?<!\d)\d{9,18}(?!\d)/g
-            };
+            if (cfg.contacts !== false) {
+                SENSITIVE_KEYWORDS.push("email", "mail", "phone", "mobile", "tel", "contact");
+            }
+            if (cfg.ner !== false) {
+                SENSITIVE_KEYWORDS.push("name", "fullname", "first_name", "last_name", "city", "address", "location", "organization", "org", "company");
+            }
+
+            // Add custom user keywords
+            if (cfg.customKeywords) {
+                const customWords = cfg.customKeywords.split(",").map(w => w.trim().toLowerCase()).filter(Boolean);
+                SENSITIVE_KEYWORDS.push(...customWords);
+            }
+
+            const PATTERNS = {};
+            if (cfg.auth !== false) {
+                PATTERNS.API_KEY = /\b(?:sk|pk|api|key|token|secret)[_-][A-Za-z0-9_-]{16,}\b/gi;
+                PATTERNS.AWS_ACCESS_KEY = /\bAKIA[0-9A-Z]{16}\b/g;
+                PATTERNS.JWT = /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g;
+            }
+            if (cfg.financial !== false) {
+                PATTERNS.CARD = /(?<!\d)(?:\d{4}[\s-]?){3}\d{4}(?!\d)/g;
+                PATTERNS.IFSC = /\b[A-Z]{4}0[A-Z0-9]{6}\b/g;
+                PATTERNS.BANK_ACCOUNT = /(?<!\d)\d{9,18}(?!\d)/g;
+            }
+            if (cfg.nationalIds !== false) {
+                PATTERNS.AADHAAR = /(?<!\d)\d{4}[\s-]\d{4}[\s-]\d{4}(?!\d)/g;
+                PATTERNS.PAN = /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g;
+                PATTERNS.PASSPORT = /\b[A-Z][0-9]{7}\b/g;
+            }
+            if (cfg.contacts !== false) {
+                PATTERNS.EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+                PATTERNS.PHONE = /(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)/g;
+            }
 
             const LABELS = {
                 PASSWORD: "REDACTED_PASSWORD",
@@ -378,6 +516,9 @@ async function extractPageData(tabId) {
                 API_KEY: "REDACTED_API_KEY",
                 AWS_ACCESS_KEY: "REDACTED_AWS_KEY",
                 JWT: "REDACTED_JWT",
+                PER: "REDACTED_PERSON",
+                LOC: "REDACTED_LOCATION",
+                ORG: "REDACTED_ORGANIZATION",
                 SENSITIVE_FIELD: "REDACTED_FIELD"
             };
 
@@ -387,10 +528,40 @@ async function extractPageData(tabId) {
                 if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > viewportHeight) return;
 
                 const type = (input.getAttribute("type") || "").toLowerCase();
-                const nameOrPlaceholder = `${input.name || ""} ${input.id || ""} ${input.placeholder || ""} ${input.getAttribute("aria-label") || ""}`.toLowerCase();
+                
+                let labelText = "";
+                try {
+                    if (input.labels && input.labels.length > 0) {
+                        labelText = Array.from(input.labels).map(l => l.innerText || l.textContent || "").join(" ");
+                    }
+                    if (!labelText && input.id) {
+                        const associatedLabel = document.querySelector(`label[for="${input.id}"]`);
+                        if (associatedLabel) labelText = associatedLabel.innerText || associatedLabel.textContent || "";
+                    }
+                    if (!labelText && input.closest) {
+                        const parentLabel = input.closest("label") || input.parentElement?.querySelector("label");
+                        if (parentLabel) labelText = parentLabel.innerText || parentLabel.textContent || "";
+                    }
+                } catch (e) {}
+
+                const nameOrPlaceholder = `${input.name || ""} ${input.id || ""} ${input.placeholder || ""} ${input.getAttribute("aria-label") || ""} ${labelText}`.toLowerCase();
 
                 let isSens = type === "password";
                 let cat = isSens ? "PASSWORD" : null;
+
+                // Check custom keywords first
+                if (!isSens && cfg.customKeywords) {
+                    const customWords = cfg.customKeywords.split(",").map(w => w.trim().toLowerCase()).filter(Boolean);
+                    for (const kw of customWords) {
+                        const normalizedKw = kw.replace(/[-_\s]/g, "");
+                        const normalizedTarget = nameOrPlaceholder.replace(/[-_\s]/g, "");
+                        if (normalizedTarget.includes(normalizedKw)) {
+                            isSens = true;
+                            cat = "CUSTOM_SECRET";
+                            break;
+                        }
+                    }
+                }
 
                 if (!isSens) {
                     for (const kw of SENSITIVE_KEYWORDS) {
@@ -401,10 +572,32 @@ async function extractPageData(tabId) {
                             else if (kw.includes("otp") || kw.includes("pin")) cat = "PIN";
                             else if (kw.includes("aadhaar") || kw.includes("aadhar")) cat = "AADHAAR";
                             else if (kw.includes("pan")) cat = "PAN";
-                            else if (kw.includes("email")) cat = "EMAIL";
-                            else if (kw.includes("phone")) cat = "PHONE";
+                            else if (kw.includes("email") || kw.includes("mail")) cat = "EMAIL";
+                            else if (kw.includes("phone") || kw.includes("mobile") || kw.includes("tel")) cat = "PHONE";
+                            else if (kw.includes("name")) cat = "PER";
+                            else if (kw.includes("city") || kw.includes("address") || kw.includes("location")) cat = "LOC";
                             else cat = "SENSITIVE_FIELD";
                             break;
+                        }
+                    }
+                }
+
+                // Check input value against regex patterns & NER
+                if (!isSens && input.value) {
+                    const val = input.value;
+                    for (const [type, regex] of Object.entries(PATTERNS)) {
+                        regex.lastIndex = 0;
+                        if (regex.test(val)) {
+                            isSens = true;
+                            cat = type;
+                            break;
+                        }
+                    }
+                    if (!isSens && cfg.ner !== false && typeof window !== "undefined" && window.ClientNER) {
+                        const nerList = window.ClientNER.extractEntities(val);
+                        if (nerList.length > 0) {
+                            isSens = true;
+                            cat = nerList[0].type;
                         }
                     }
                 }
@@ -434,6 +627,7 @@ async function extractPageData(tabId) {
                 const parentRect = currNode.parentElement?.getBoundingClientRect();
                 if (parentRect && (parentRect.bottom < 0 || parentRect.top > viewportHeight)) continue;
 
+                // Check active regex patterns
                 for (const [type, regex] of Object.entries(PATTERNS)) {
                     regex.lastIndex = 0;
                     let m;
@@ -461,6 +655,50 @@ async function extractPageData(tabId) {
                         }
                     }
                 }
+
+                // Check custom keywords in text
+                if (cfg.customKeywords) {
+                    const customWords = cfg.customKeywords.split(",").map(w => w.trim()).filter(Boolean);
+                    for (const kw of customWords) {
+                        const kwRegex = new RegExp(`\\b${kw}\\b`, "gi");
+                        let m;
+                        while ((m = kwRegex.exec(text)) !== null) {
+                            try {
+                                const range = document.createRange();
+                                range.setStart(currNode, m.index);
+                                range.setEnd(currNode, m.index + m[0].length);
+                                const r = range.getBoundingClientRect();
+                                if (r.width > 0 && r.height > 0) {
+                                    sensitiveRegions.push({
+                                        category: "CUSTOM_SECRET",
+                                        label: "REDACTED_SECRET",
+                                        rect: { x: r.x, y: r.y, width: r.width, height: r.height }
+                                    });
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+
+                // Check on-device NER entities if enabled
+                if (cfg.ner !== false && typeof window !== "undefined" && window.ClientNER) {
+                    const nerEntities = window.ClientNER.extractEntities(text);
+                    nerEntities.forEach(ent => {
+                        try {
+                            const range = document.createRange();
+                            range.setStart(currNode, ent.start);
+                            range.setEnd(currNode, ent.end);
+                            const r = range.getBoundingClientRect();
+                            if (r.width > 0 && r.height > 0) {
+                                sensitiveRegions.push({
+                                    category: ent.type,
+                                    label: LABELS[ent.type] || "REDACTED",
+                                    rect: { x: r.x, y: r.y, width: r.width, height: r.height }
+                                });
+                            }
+                        } catch (e) {}
+                    });
+                }
             }
 
             return {
@@ -472,7 +710,8 @@ async function extractPageData(tabId) {
                     viewportHeight
                 }
             };
-        }
+        },
+        args: [userConfig]
     });
 
     const output = results[0]?.result;
@@ -616,16 +855,26 @@ async function saveChat(messages) {
     await chrome.storage.local.set({ [CHAT_KEY]: messages });
 }
 
-async function addChatMessage(role, content) {
+async function addChatMessage(role, content, model = null) {
     const messages = await getChat();
     messages.push({
         id: crypto.randomUUID(),
         role,
         content,
+        model,
         timestamp: Date.now()
     });
     await saveChat(messages);
     renderChat();
+}
+
+function formatModelLabel(id) {
+    if (!id) return "Groq Vision";
+    if (id.includes("compound-mini")) return "Compound Mini";
+    if (id.includes("120b")) return "GPT-OSS 120B";
+    if (id.includes("20b")) return "GPT-OSS 20B";
+    if (id.includes("qwen")) return "Qwen 27B";
+    return id.split("/")[1] || id;
 }
 
 async function clearChat() {
@@ -711,6 +960,7 @@ function sleep(ms) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+    await loadPrivacyConfig();
     await renderChat();
     updateSendButtonState();
     taskInput.focus();

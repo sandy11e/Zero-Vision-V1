@@ -1,16 +1,19 @@
 import json
 import os
 import re
+import time
 from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import groq
 
 from privacy.detector import detect_page, detect_text
 from privacy.policy import evaluate_detections, Action
 from privacy.redactor import redact_text
+from dashboard import DASHBOARD_HTML
 
 load_dotenv()
 
@@ -30,6 +33,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# =========================================================
+# LIVE TELEMETRY STORE (FOR JUDGE & DASHBOARD MONITORING)
+# =========================================================
+
+TELEMETRY_STATE = {
+    "latest_screenshot": None,
+    "latest_timestamp": None,
+    "total_steps": 0,
+    "total_redactions": 0,
+    "category_counts": {
+        "AADHAAR": 0,
+        "PAN": 0,
+        "CARD": 0,
+        "CVV": 0,
+        "PASSWORD": 0,
+        "PIN": 0,
+        "OTP": 0,
+        "PHONE": 0,
+        "EMAIL": 0,
+        "API_KEY": 0,
+        "JWT": 0,
+        "AWS_ACCESS_KEY": 0
+    },
+    "history": []
+}
 
 # =========================================================
 # MODELS
@@ -74,6 +103,11 @@ class NextActionRequest(BaseModel):
     screenshot: str | None = None  # Base64 sanitized screenshot
     history: list[HistoryItem] = []
     privacy: dict | None = None
+    model: str | None = None
+
+
+class SandboxRequest(BaseModel):
+    text: str
 
 
 # =========================================================
@@ -220,12 +254,9 @@ def server_privacy_check(page_context: PageContext):
             "reason": "Unmasked critical credentials detected in page context."
         }
 
-    # Redact any unmasked sensitive text that reached the server
-    sanitized = dict(original)
-    sanitized["text"] = redact_text(original.get("text", ""), detect_text(original.get("text", "")))
     return {
         "status": "PROTECTED",
-        "context": PageContext(**sanitized)
+        "context": page_context
     }
 
 # =========================================================
@@ -274,7 +305,8 @@ async def decide_action(
     task: str,
     page_context: PageContext,
     screenshot: str | None,
-    history: list[HistoryItem]
+    history: list[HistoryItem],
+    preferred_model: str | None = None
 ) -> dict:
     if not groq_client:
         raise ValueError("GROQ_API_KEY environment variable is not configured.")
@@ -305,14 +337,40 @@ Choose the single best next action. Return valid JSON only with keys "action", "
         {"role": "user", "content": user_prompt_text}
     ]
 
-    # 3. Call Groq Model with forced JSON response format
-    response = await groq_client.chat.completions.create(
-        model=DEFAULT_MODEL,
-        messages=messages,
-        temperature=0.0,
-        max_tokens=800,
-        response_format={"type": "json_object"}
-    )
+    # 3. Call Groq Model with automatic resilient fallback
+    CANDIDATE_MODELS = []
+    if preferred_model:
+        CANDIDATE_MODELS.append(preferred_model)
+    default_m = os.getenv("AGENT_MODEL", "openai/gpt-oss-20b")
+    if default_m not in CANDIDATE_MODELS:
+        CANDIDATE_MODELS.append(default_m)
+    for fallback_m in ["groq/compound-mini", "openai/gpt-oss-120b", "qwen/qwen3.6-27b"]:
+        if fallback_m not in CANDIDATE_MODELS:
+            CANDIDATE_MODELS.append(fallback_m)
+
+    response = None
+    last_error = None
+    used_model = None
+    for model_name in CANDIDATE_MODELS:
+        try:
+            print(f"🤖 [AI Engine] Requesting inference from: {model_name}...")
+            response = await groq_client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.0,
+                max_tokens=800,
+                response_format={"type": "json_object"}
+            )
+            if response and response.choices:
+                used_model = model_name
+                print(f"✅ [AI Engine] Successfully responded using model: {model_name}")
+                break
+        except Exception as err:
+            last_error = err
+            print(f"⚠️ Model {model_name} failed ({err}), failing over to next candidate...")
+
+    if not response:
+        raise last_error or ValueError("All Groq decision models failed.")
 
     msg = response.choices[0].message
     raw_output = msg.content or getattr(msg, "reasoning", "") or ""
@@ -325,7 +383,7 @@ Choose the single best next action. Return valid JSON only with keys "action", "
 
     # 4. Validate Action Bounds
     validate_action(action, safe_context)
-    return action
+    return action, used_model or preferred_model or default_m
 
 # =========================================================
 # API ROUTES
@@ -337,22 +395,90 @@ async def root():
         "status": "ok",
         "service": "Privacy Vision Browser Agent API",
         "privacy_shield": "Client-Side Zero-Leakage Active",
-        "model": DEFAULT_MODEL
+        "model": DEFAULT_MODEL,
+        "dashboard_url": "http://127.0.0.1:8000/dashboard"
+    }
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def get_dashboard():
+    """Serves the live telemetry and demonstration dashboard for judges."""
+    return HTMLResponse(content=DASHBOARD_HTML)
+
+
+@app.get("/api/telemetry")
+async def get_telemetry():
+    """Returns current live telemetry and execution metrics."""
+    return TELEMETRY_STATE
+
+
+@app.post("/api/telemetry/reset")
+async def reset_telemetry():
+    """Resets the in-memory telemetry buffer."""
+    TELEMETRY_STATE["latest_screenshot"] = None
+    TELEMETRY_STATE["latest_timestamp"] = None
+    TELEMETRY_STATE["total_steps"] = 0
+    TELEMETRY_STATE["total_redactions"] = 0
+    for k in TELEMETRY_STATE["category_counts"]:
+        TELEMETRY_STATE["category_counts"][k] = 0
+    TELEMETRY_STATE["history"] = []
+    return {"status": "ok", "message": "Telemetry store reset successfully."}
+
+
+@app.post("/api/sandbox/test")
+async def sandbox_test(req: SandboxRequest):
+    """Instant testing endpoint for judges to test PII detection and redaction."""
+    detections = detect_text(req.text)
+    sanitized = redact_text(req.text, detections)
+    return {
+        "original_text": req.text,
+        "detections_count": len(detections),
+        "detections": [d.__dict__ for d in detections],
+        "sanitized_text": sanitized
     }
 
 
 @app.post("/agent/next")
 async def next_action(request: NextActionRequest):
     try:
-        action = await decide_action(
+        action, active_model = await decide_action(
             request.task,
             request.page_context,
             request.screenshot,
-            request.history
+            request.history,
+            preferred_model=request.model
         )
+
+        # Log step to telemetry store for live dashboard monitoring
+        step_index = len(request.history) + 1
+        TELEMETRY_STATE["total_steps"] += 1
+        TELEMETRY_STATE["latest_timestamp"] = int(time.time() * 1000)
+
+        if request.screenshot:
+            TELEMETRY_STATE["latest_screenshot"] = request.screenshot
+
+        if request.privacy:
+            redacted_count = request.privacy.get("redactedCount", 0)
+            TELEMETRY_STATE["total_redactions"] += redacted_count
+            cats = request.privacy.get("categories", {})
+            for k, count in cats.items():
+                if k in TELEMETRY_STATE["category_counts"]:
+                    TELEMETRY_STATE["category_counts"][k] += count
+                else:
+                    TELEMETRY_STATE["category_counts"][k] = count
+
+        TELEMETRY_STATE["history"].append({
+            "step": step_index,
+            "task": request.task,
+            "action": action,
+            "model": active_model,
+            "timestamp": TELEMETRY_STATE["latest_timestamp"]
+        })
+
         return {
             "success": True,
             "action": action,
+            "model_used": active_model,
             "privacy": request.privacy or {"status": "CLIENT_PROTECTED"}
         }
     except Exception as e:
