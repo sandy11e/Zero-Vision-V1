@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Vision Agent - Side Chat</title>
+    <title>S.H.I.E.L.D</title>
+    <link rel="icon" type="image/png" href="logo.png">
     <link rel="stylesheet" href="popup.css">
 </head>
 
@@ -15,11 +16,28 @@
         <!-- TOP TAB BAR -->
         <header class="panel-header">
             <div class="tab-title">
+                <img src="logo.png" alt="S.H.I.E.L.D" class="brand-logo-img">
                 <span class="status-indicator" title="Privacy Shield Active"></span>
-                <span class="title-text">Privacy Agent Side Chat</span>
+                <span class="title-text">S.H.I.E.L.D</span>
             </div>
 
             <div class="header-actions">
+                <button id="themeToggleBtn" class="tool-btn" title="Toggle Light/Dark Theme">
+                    <svg id="themeIconSun" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg id="themeIconMoon" class="hidden" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
                 <button id="settingsToggleBtn" class="tool-btn" title="Privacy Filter Settings">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -148,9 +166,57 @@
 
                 <div class="input-toolbar">
                     <div class="toolbar-left">
-                        <!-- INTERACTIVE MODEL SELECTOR -->
-                        <div class="model-select-wrap">
-                            <select id="modelSelect" class="model-dropdown" title="Choose Decision AI Model">
+                        <!-- CUSTOM INTERACTIVE DROP-UP MODEL PICKER -->
+                        <div class="model-dropup-container" id="modelDropup">
+                            <button type="button" id="modelDropupBtn" class="model-dropup-btn" title="Choose AI Reasoning Model">
+                                <span id="selectedModelLabel">Groq Compound Mini</span>
+                                <svg class="dropup-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="18 15 12 9 6 15"></polyline>
+                                </svg>
+                            </button>
+
+                            <div id="modelDropupMenu" class="model-dropup-menu hidden">
+                                <div class="dropup-header">Reasoning Model</div>
+                                <div class="dropup-item active" data-value="groq/compound-mini" data-label="Groq Compound Mini">
+                                    <div class="dropup-item-left">
+                                        <span class="dropup-item-name">Groq Compound Mini</span>
+                                        <span class="dropup-item-badge speed">Fast</span>
+                                    </div>
+                                    <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="dropup-item" data-value="openai/gpt-oss-20b" data-label="GPT-OSS 20B">
+                                    <div class="dropup-item-left">
+                                        <span class="dropup-item-name">GPT-OSS 20B</span>
+                                        <span class="dropup-item-badge reasoning">Reasoning</span>
+                                    </div>
+                                    <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="dropup-item" data-value="openai/gpt-oss-120b" data-label="GPT-OSS 120B">
+                                    <div class="dropup-item-left">
+                                        <span class="dropup-item-name">GPT-OSS 120B</span>
+                                        <span class="dropup-item-badge deep">Deep</span>
+                                    </div>
+                                    <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="dropup-item" data-value="qwen/qwen3.6-27b" data-label="Qwen 27B">
+                                    <div class="dropup-item-left">
+                                        <span class="dropup-item-name">Qwen 27B Vision</span>
+                                        <span class="dropup-item-badge vision">Vision</span>
+                                    </div>
+                                    <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Synchronized hidden select for backend & storage compatibility -->
+                            <select id="modelSelect" style="display: none;">
                                 <option value="groq/compound-mini" selected>Groq Compound Mini</option>
                                 <option value="openai/gpt-oss-20b">GPT-OSS 20B (Reasoning)</option>
                                 <option value="openai/gpt-oss-120b">GPT-OSS 120B (Deep)</option>

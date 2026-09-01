@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Privacy Vision Agent",
+  "name": "S.H.I.E.L.D",
   "version": "1.0.0",
-  "description": "Privacy-Preserving AI Browser Vision Agent",
+  "description": "S.H.I.E.L.D - Privacy-Preserving AI Browser Vision Agent",
 
   "permissions": [
     "activeTab",
@@ -20,8 +20,15 @@
     "service_worker": "background.js"
   },
 
+  "icons": {
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+
   "action": {
-    "default_title": "Open Privacy Agent Side Panel"
+    "default_title": "Open S.H.I.E.L.D Side Panel",
+    "default_icon": "logo.png"
   },
 
   "side_panel": {

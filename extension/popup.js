@@ -15,6 +15,11 @@ const errorMessage = document.getElementById("errorMessage");
 const chat = document.getElementById("chat");
 const clearHistoryButton = document.getElementById("clearHistory");
 
+// Theme Toggle Elements
+const themeToggleBtn = document.getElementById("themeToggleBtn");
+const themeIconSun = document.getElementById("themeIconSun");
+const themeIconMoon = document.getElementById("themeIconMoon");
+
 // Settings Drawer Elements
 const settingsToggleBtn = document.getElementById("settingsToggleBtn");
 const closeSettingsBtn = document.getElementById("closeSettingsBtn");
@@ -26,7 +31,11 @@ const toggleContacts = document.getElementById("toggleContacts");
 const toggleNer = document.getElementById("toggleNer");
 const customKeywordsInput = document.getElementById("customKeywordsInput");
 
-// Model Selector
+// Model Drop-Up Elements
+const modelDropup = document.getElementById("modelDropup");
+const modelDropupBtn = document.getElementById("modelDropupBtn");
+const modelDropupMenu = document.getElementById("modelDropupMenu");
+const selectedModelLabel = document.getElementById("selectedModelLabel");
 const modelSelect = document.getElementById("modelSelect");
 
 // In-App Modal Elements
@@ -44,6 +53,7 @@ const BACKEND_URL = "http://127.0.0.1:8000/agent/next";
 const CHAT_KEY = "copilotPrivacyVisionSideChat";
 const CONFIG_KEY = "copilotPrivacyFilterConfig";
 const MODEL_KEY = "copilotSelectedModelChoice";
+const THEME_KEY = "shieldUIThemeChoice";
 
 let running = false;
 let controller = null;
@@ -96,14 +106,44 @@ modalCancelBtn.addEventListener("click", () => {
 });
 
 /* =========================================================
+   THEME (DARK / LIGHT MODE) CONTROLLER
+========================================================= */
+
+function applyTheme(theme) {
+    if (theme === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.body.classList.add("light-theme");
+        if (themeIconSun) themeIconSun.classList.add("hidden");
+        if (themeIconMoon) themeIconMoon.classList.remove("hidden");
+    } else {
+        document.documentElement.removeAttribute("data-theme");
+        document.body.classList.remove("light-theme");
+        if (themeIconSun) themeIconSun.classList.remove("hidden");
+        if (themeIconMoon) themeIconMoon.classList.add("hidden");
+    }
+}
+
+if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", async () => {
+        const isLight = document.body.classList.contains("light-theme");
+        const nextTheme = isLight ? "dark" : "light";
+        applyTheme(nextTheme);
+        await chrome.storage.local.set({ [THEME_KEY]: nextTheme });
+    });
+}
+
+/* =========================================================
    SETTINGS & MODEL MANAGEMENT
 ========================================================= */
 
 async function loadPrivacyConfig() {
-    const data = await chrome.storage.local.get([CONFIG_KEY, MODEL_KEY]);
+    const data = await chrome.storage.local.get([CONFIG_KEY, MODEL_KEY, THEME_KEY]);
     if (data[CONFIG_KEY]) {
         activePrivacyConfig = { ...activePrivacyConfig, ...data[CONFIG_KEY] };
     }
+
+    // Apply saved theme or default to dark
+    applyTheme(data[THEME_KEY] || "dark");
 
     // Update UI controls
     toggleNationalIds.checked = activePrivacyConfig.nationalIds;
@@ -113,8 +153,22 @@ async function loadPrivacyConfig() {
     toggleNer.checked = activePrivacyConfig.ner;
     customKeywordsInput.value = activePrivacyConfig.customKeywords || "";
 
-    if (data[MODEL_KEY] && modelSelect) {
-        modelSelect.value = data[MODEL_KEY];
+    const savedModel = data[MODEL_KEY] || "groq/compound-mini";
+    if (modelSelect) {
+        modelSelect.value = savedModel;
+    }
+    updateDropupUI(savedModel);
+}
+
+function updateDropupUI(val) {
+    if (!val || !modelDropupMenu) return;
+    const item = modelDropupMenu.querySelector(`.dropup-item[data-value="${val}"]`);
+    if (item) {
+        modelDropupMenu.querySelectorAll(".dropup-item").forEach(el => el.classList.remove("active"));
+        item.classList.add("active");
+        if (selectedModelLabel) {
+            selectedModelLabel.textContent = item.getAttribute("data-label") || formatModelLabel(val);
+        }
     }
 }
 
@@ -130,14 +184,44 @@ async function savePrivacyConfig() {
     await chrome.storage.local.set({ [CONFIG_KEY]: activePrivacyConfig });
 }
 
-if (modelSelect) {
-    modelSelect.addEventListener("change", async () => {
-        const chosen = modelSelect.value;
-        await chrome.storage.local.set({ [MODEL_KEY]: chosen });
-        setStatus(`AI Model set to ${formatModelLabel(chosen)}`, "stopped");
-        setTimeout(() => {
-            if (!running) hideStatus();
-        }, 1500);
+// Custom Drop-Up Controller
+if (modelDropupBtn && modelDropupMenu) {
+    modelDropupBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = !modelDropupMenu.classList.contains("hidden");
+        if (isOpen) {
+            modelDropupMenu.classList.add("hidden");
+            modelDropupBtn.classList.remove("open");
+        } else {
+            modelDropupMenu.classList.remove("hidden");
+            modelDropupBtn.classList.add("open");
+        }
+    });
+
+    document.addEventListener("click", (e) => {
+        if (modelDropup && !modelDropup.contains(e.target)) {
+            modelDropupMenu.classList.add("hidden");
+            modelDropupBtn.classList.remove("open");
+        }
+    });
+
+    modelDropupMenu.querySelectorAll(".dropup-item").forEach(item => {
+        item.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const val = item.getAttribute("data-value");
+            if (modelSelect) {
+                modelSelect.value = val;
+            }
+            updateDropupUI(val);
+            modelDropupMenu.classList.add("hidden");
+            modelDropupBtn.classList.remove("open");
+
+            await chrome.storage.local.set({ [MODEL_KEY]: val });
+            setStatus(`AI Model set to ${formatModelLabel(val)}`, "stopped");
+            setTimeout(() => {
+                if (!running) hideStatus();
+            }, 1500);
+        });
     });
 }
 
@@ -890,12 +974,9 @@ async function renderChat() {
         chat.innerHTML = `
             <div class="chat-placeholder">
                 <div class="placeholder-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        <path d="M9 12l2 2 4-4"/>
-                    </svg>
+                    <img src="logo.png" alt="S.H.I.E.L.D Logo" class="placeholder-logo-img">
                 </div>
-                <div class="placeholder-title">Privacy Vision Agent</div>
+                <div class="placeholder-title">S.H.I.E.L.D</div>
                 <div class="placeholder-desc">
                     Automate tasks on your active browser tab. All sensitive form data, credentials, and screen pixels are masked locally before AI processing.
                 </div>
@@ -916,10 +997,8 @@ async function renderChat() {
         } else if (m.role === "agent") {
             item.innerHTML = `
                 <div class="agent-label-row">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                    </svg>
-                    <span>Privacy Agent</span>
+                    <img src="logo.png" alt="S.H.I.E.L.D" class="agent-avatar-img">
+                    <span>S.H.I.E.L.D</span>
                 </div>
                 <div class="msg-content">${formatAgentResponse(m.content)}</div>
                 <div class="msg-timestamp">${formatTime(m.timestamp)}</div>

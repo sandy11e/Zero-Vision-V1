@@ -8,7 +8,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Vision Agent — Zero-Leakage Live Audit Dashboard</title>
+    <title>S.H.I.E.L.D — Zero-Leakage Live Audit Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -54,6 +54,52 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             --radius-md: 10px;
             --radius-lg: 14px;
             --radius-xl: 18px;
+        }
+
+        :root[data-theme="dark"], body.dark-theme {
+            --bg-page: #0b0f19;
+            --bg-card: #151d2e;
+            --bg-subtle: #0f172a;
+            --bg-inset: #090d16;
+            --border-subtle: #24324a;
+            --border-strong: #3b4d6b;
+            --text-main: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #8da2c0;
+            --brand-bg: rgba(2, 132, 199, 0.2);
+            --brand-border: rgba(56, 189, 248, 0.4);
+        }
+
+        body.dark-theme .card-header {
+            background: #151d2e;
+        }
+        body.dark-theme .timeline-row:hover,
+        body.dark-theme .entity-row:hover {
+            background: #0f172a;
+        }
+        body.dark-theme .step-cmd-box {
+            background: #090d16;
+            color: #f8fafc;
+            border-color: #24324a;
+        }
+        body.dark-theme .btn-action {
+            background: #151d2e;
+            color: #e2e8f0;
+            border-color: #24324a;
+        }
+        body.dark-theme .btn-action:hover {
+            background: #24324a;
+        }
+        body.dark-theme .btn-preset {
+            background: #0f172a;
+            border-color: #24324a;
+            color: #cbd5e1;
+        }
+        body.dark-theme .sandbox-input,
+        body.dark-theme .sandbox-output-box {
+            background: #090d16;
+            color: #f8fafc;
+            border-color: #24324a;
         }
 
         * {
@@ -106,7 +152,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             height: 44px;
             background: linear-gradient(135deg, #e0f2fe, #bae6fd);
             border: 1px solid #7dd3fc;
-            border-radius: 12px;
+            border-radius: 50%;
             color: #0284c7;
             box-shadow: 0 2px 8px rgba(2, 132, 199, 0.15);
         }
@@ -736,7 +782,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             </div>
             <div class="brand-title-wrap">
                 <div class="brand-title">
-                    <span>Privacy Vision Agent</span>
+                    <span>S.H.I.E.L.D</span>
                     <span class="tag-pill">Zero-Leakage Telemetry</span>
                 </div>
                 <div class="brand-sub">Client-Side Redaction Audit & Real-Time Decision Stream</div>
@@ -744,6 +790,23 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>
 
         <div class="nav-actions">
+            <button id="dashboardThemeToggleBtn" class="btn-action" title="Toggle Light/Dark Theme">
+                <svg id="dashThemeSun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <svg id="dashThemeMoon" class="hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <span id="dashThemeLabel">Dark Theme</span>
+            </button>
             <div class="status-badge">
                 <span class="dot-pulse"></span>
                 <span id="telemetryStatusText">Active Stream (1s Polling)</span>
@@ -1197,6 +1260,39 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         const p = document.createElement("p");
         p.textContent = str;
         return p.innerHTML;
+    }
+
+    // Dashboard Dark/Light Theme Controller
+    const dashboardThemeToggleBtn = document.getElementById("dashboardThemeToggleBtn");
+    const dashThemeSun = document.getElementById("dashThemeSun");
+    const dashThemeMoon = document.getElementById("dashThemeMoon");
+    const dashThemeLabel = document.getElementById("dashThemeLabel");
+
+    function applyDashTheme(theme) {
+        if (theme === "dark") {
+            document.body.classList.add("dark-theme");
+            document.documentElement.setAttribute("data-theme", "dark");
+            dashThemeSun.classList.add("hidden");
+            dashThemeMoon.classList.remove("hidden");
+            dashThemeLabel.textContent = "Light Theme";
+        } else {
+            document.body.classList.remove("dark-theme");
+            document.documentElement.removeAttribute("data-theme");
+            dashThemeSun.classList.remove("hidden");
+            dashThemeMoon.classList.add("hidden");
+            dashThemeLabel.textContent = "Dark Theme";
+        }
+        localStorage.setItem("shieldDashboardTheme", theme);
+    }
+
+    if (dashboardThemeToggleBtn) {
+        const savedDashTheme = localStorage.getItem("shieldDashboardTheme") || "light";
+        applyDashTheme(savedDashTheme);
+
+        dashboardThemeToggleBtn.addEventListener("click", () => {
+            const isDark = document.body.classList.contains("dark-theme");
+            applyDashTheme(isDark ? "light" : "dark");
+        });
     }
 
     // Poll every 1 second

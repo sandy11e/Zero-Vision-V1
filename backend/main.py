@@ -18,7 +18,7 @@ from dashboard import DASHBOARD_HTML
 load_dotenv()
 
 app = FastAPI(
-    title="Privacy Vision Browser Agent API",
+    title="S.H.I.E.L.D Vision Browser Agent API",
     version="1.0.0"
 )
 
@@ -393,7 +393,7 @@ Choose the single best next action. Return valid JSON only with keys "action", "
 async def root():
     return {
         "status": "ok",
-        "service": "Privacy Vision Browser Agent API",
+        "service": "S.H.I.E.L.D Vision Browser Agent API",
         "privacy_shield": "Client-Side Zero-Leakage Active",
         "model": DEFAULT_MODEL,
         "dashboard_url": "http://127.0.0.1:8000/dashboard"
