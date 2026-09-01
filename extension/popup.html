@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Vision Agent - Side Chat</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+
+    <div class="copilot-panel">
+
+        <!-- TOP TAB BAR -->
+        <header class="panel-header">
+            <div class="tab-title">
+                <span class="status-indicator"></span>
+                <span class="title-text">Privacy Agent Side Chat</span>
+            </div>
+
+            <div class="header-actions">
+                <button id="clearHistory" class="tool-btn" title="Clear conversation history">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- PRIVACY SHIELD AUDIT BANNER -->
+        <section class="privacy-strip">
+            <div class="strip-left">
+                <svg class="shield-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <path d="M9 12l2 2 4-4" />
+                </svg>
+                <span class="strip-label">Protected:</span>
+                <span id="redactedCountBadge" class="count-tag">0 items</span>
+            </div>
+
+            <button id="togglePreviewBtn" class="strip-toggle" title="Inspect sanitized visual state">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span id="togglePreviewText">Inspect Mask</span>
+            </button>
+        </section>
+
+        <!-- COLLAPSIBLE VISUAL MASK DRAWER -->
+        <div id="previewContainer" class="mask-drawer hidden">
+            <div class="drawer-bar">
+                <span>Sanitized Screenshot (Zero PII Transmitted)</span>
+                <span class="status-clean">100% Masked</span>
+            </div>
+            <div class="drawer-view">
+                <img id="redactedPreviewImg" alt="Redacted Canvas" />
+            </div>
+        </div>
+
+        <!-- MAIN CONVERSATION STREAM -->
+        <main class="chat-stream" id="chat"></main>
+
+        <!-- RUNTIME EXECUTION CHIP BAR -->
+        <section id="status" class="status-toast hidden">
+            <div class="toast-left">
+                <div id="statusSpinner" class="spinner-inline"></div>
+                <div class="toast-text">
+                    <span id="statusTitle" class="toast-title">Thinking</span>
+                    <span id="statusText" class="toast-desc">Evaluating page...</span>
+                </div>
+            </div>
+            <span id="stepCounter" class="step-badge">Step 1/20</span>
+        </section>
+
+        <!-- ERROR BANNER -->
+        <section id="error" class="error-strip hidden">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span id="errorMessage"></span>
+        </section>
+
+        <!-- COPILOT STYLE COMPOSER DOCK -->
+        <footer class="composer-section">
+            <!-- QUICK ACTION CHIPS -->
+            
+
+            <!-- INPUT BOX -->
+            <div class="copilot-input-box">
+                <textarea id="task" placeholder="Ask anything .." rows="1" autofocus></textarea>
+
+                <div class="input-toolbar">
+                    <div class="toolbar-left">
+                        <div class="model-select-pill">
+                            <span>Groq Vision 20B</span>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-right">
+                        <button id="stopButton" class="btn-cancel hidden" title="Stop execution">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                            </svg>
+                            <span>Stop</span>
+                        </button>
+
+                        <button id="runButton" class="btn-submit" disabled title="Send message (Enter)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="19" x2="12" y2="5"></line>
+                                <polyline points="5 12 12 5 19 12"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="privacy.js"></script>
+    <script src="popup.js"></script>
+
+</body>
+
+</html>
