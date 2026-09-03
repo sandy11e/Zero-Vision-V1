@@ -156,6 +156,24 @@ body.light-theme .chat-stream::-webkit-scrollbar-thumb {
     background-color: #cbd5e1;
 }
 
+body.light-theme .btn-mic {
+    background-color: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #64748b;
+}
+
+body.light-theme .btn-mic:hover:not(:disabled) {
+    background-color: #e2e8f0;
+    border-color: #0284c7;
+    color: #0284c7;
+}
+
+body.light-theme .btn-mic.listening {
+    background: #dc2626;
+    border-color: #ef4444;
+    color: #ffffff;
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -824,6 +842,59 @@ textarea#task::placeholder {
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
+}
+
+/* =========================================================
+   VOICE INPUT (MICROPHONE) BUTTON & PULSE ANIMATION
+========================================================= */
+
+.btn-mic {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    background-color: var(--vscode-surface);
+    border: 1px solid var(--vscode-border);
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+
+.btn-mic:hover:not(:disabled) {
+    color: var(--text-bright);
+    border-color: var(--copilot-blue);
+    background-color: rgba(0, 127, 212, 0.14);
+}
+
+.btn-mic:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.btn-mic.listening {
+    color: #ffffff;
+    background: #dc2626;
+    border-color: #ef4444;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    animation: micPulseWave 1.4s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes micPulseWave {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+        transform: scale(1.06);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        transform: scale(1);
+    }
 }
 
 /* =========================================================

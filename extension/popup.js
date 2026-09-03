@@ -5,11 +5,11 @@
 const taskInput = document.getElementById("task");
 const runButton = document.getElementById("runButton");
 const stopButton = document.getElementById("stopButton");
+const micButton = document.getElementById("micButton");
 const statusCard = document.getElementById("status");
 const statusText = document.getElementById("statusText");
 const statusTitle = document.getElementById("statusTitle");
 const statusSpinner = document.getElementById("statusSpinner");
-const stepCounter = document.getElementById("stepCounter");
 const errorCard = document.getElementById("error");
 const errorMessage = document.getElementById("errorMessage");
 const chat = document.getElementById("chat");
@@ -277,12 +277,154 @@ taskInput.addEventListener("keydown", (event) => {
 });
 
 stopButton.addEventListener("click", () => {
+    if (isListening) {
+        stopListening();
+    }
     if (!running) return;
     running = false;
     if (controller) {
         controller.abort();
     }
 });
+
+/* =========================================================
+   VOICE INPUT ENGINE (WEB SPEECH API)
+========================================================= */
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+let speechBaseText = "";
+
+function initSpeechRecognition() {
+    if (!SpeechRecognition) {
+        console.warn("Web Speech API is not supported in this browser.");
+        if (micButton) {
+            micButton.title = "Speech recognition is not supported in this browser";
+            micButton.style.opacity = "0.35";
+            micButton.style.cursor = "not-allowed";
+        }
+        return null;
+    }
+
+    const recog = new SpeechRecognition();
+    recog.continuous = true;
+    recog.interimResults = true;
+    recog.lang = navigator.language || "en-US";
+
+    recog.onstart = () => {
+        isListening = true;
+        if (micButton) {
+            micButton.classList.add("listening");
+            micButton.title = "Listening... Click to stop";
+        }
+        speechBaseText = taskInput.value;
+        if (speechBaseText && !speechBaseText.endsWith(" ")) {
+            speechBaseText += " ";
+        }
+        taskInput.placeholder = "Listening... Speak now";
+    };
+
+    recog.onresult = (event) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalTranscript += transcript;
+            } else {
+                interimTranscript += transcript;
+            }
+        }
+
+        const currentSpoken = finalTranscript || interimTranscript;
+        taskInput.value = speechBaseText + currentSpoken;
+        autoResizeTextarea();
+        updateSendButtonState();
+    };
+
+    recog.onerror = (event) => {
+        console.warn("Speech recognition error:", event.error);
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            showError("Microphone access denied. Please allow microphone permission in Chrome for this extension.");
+        } else if (event.error === "no-speech") {
+            // Silence detected within timeout, reset cleanly
+        } else if (event.error !== "aborted") {
+            showError(`Voice input error: ${event.error}`);
+        }
+        stopListening();
+    };
+
+    recog.onend = () => {
+        stopListening();
+    };
+
+    return recog;
+}
+
+async function toggleVoiceInput() {
+    if (running) return;
+
+    if (!SpeechRecognition) {
+        showError("Speech Recognition is not supported in this browser.");
+        return;
+    }
+
+    if (isListening) {
+        stopListening();
+        return;
+    }
+
+    try {
+        // Request/probe microphone access via getUserMedia to trigger permission prompt if needed
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+            } catch (permErr) {
+                if (permErr.name === "NotAllowedError" || permErr.name === "PermissionDeniedError") {
+                    showError("Microphone access blocked. Please allow microphone permission in Chrome for this extension.");
+                    return;
+                }
+            }
+        }
+
+        if (!recognition) {
+            recognition = initSpeechRecognition();
+        }
+
+        if (recognition) {
+            hideError();
+            recognition.start();
+        }
+    } catch (err) {
+        console.error("Failed to start speech recognition:", err);
+        stopListening();
+    }
+}
+
+function stopListening() {
+    isListening = false;
+    if (micButton) {
+        micButton.classList.remove("listening");
+        micButton.title = "Voice input (Speech to Text)";
+    }
+    if (taskInput && taskInput.placeholder === "Listening... Speak now") {
+        taskInput.placeholder = "Ask anything ..";
+    }
+    if (recognition) {
+        try {
+            recognition.stop();
+        } catch (e) {}
+    }
+    autoResizeTextarea();
+    updateSendButtonState();
+}
+
+if (micButton) {
+    micButton.addEventListener("click", toggleVoiceInput);
+}
 
 clearHistoryButton.addEventListener("click", clearChatWithPrompt);
 
@@ -322,6 +464,10 @@ async function runAgent() {
 
     if (running) return;
 
+    if (isListening) {
+        stopListening();
+    }
+
     running = true;
     controller = new AbortController();
 
@@ -351,10 +497,8 @@ async function runAgent() {
         const selectedModel = modelSelect ? modelSelect.value : "groq/compound-mini";
 
         for (let step = 0; step < MAX_STEPS && running; step++) {
-            stepCounter.textContent = `Step ${step + 1}/${MAX_STEPS}`;
-
             // 1. Capture Visible Tab Screenshot
-            setStatus(`Capturing tab visual state (Step ${step + 1})...`);
+            setStatus("Capturing tab visual state...");
 
             let rawScreenshotDataUrl = null;
             try {
@@ -366,7 +510,7 @@ async function runAgent() {
             }
 
             // 2. Extract DOM Context & Scan Sensitive Regions (Passing User Privacy Config)
-            setStatus(`Scanning & redacting sensitive PII on-device (Step ${step + 1})...`);
+            setStatus("Scanning & redacting sensitive PII on-device...");
 
             const pageContextData = await extractPageData(tabId, activePrivacyConfig);
             const rawContext = pageContextData.context;
@@ -399,7 +543,7 @@ async function runAgent() {
             }
 
             // 4. Send Sanitized Payload with Selected Model to Backend VLM
-            setStatus(`Vision AI (${selectedModel}) reasoning (Step ${step + 1})...`);
+            setStatus(`Vision AI (${selectedModel}) reasoning...`);
 
             const response = await fetch(BACKEND_URL, {
                 method: "POST",
@@ -890,12 +1034,14 @@ async function executeActionInTab(tabId, action) {
 function setRunningState() {
     runButton.disabled = true;
     runButton.classList.remove("glowing");
+    if (micButton) micButton.disabled = true;
     stopButton.classList.remove("hidden");
     statusCard.classList.remove("hidden");
 }
 
 function setIdleState() {
     stopButton.classList.add("hidden");
+    if (micButton) micButton.disabled = false;
     updateSendButtonState();
 }
 
